@@ -16,6 +16,8 @@ from django.conf import settings
 # login 
 from django.contrib.auth import authenticate,login,logout
 
+import threading
+
 # Create your views here.
 
 
@@ -25,6 +27,13 @@ class HomeView(View):
         return render(request,self.template_name)
 
 
+class EmailTreading(threading.Thread):
+    def __init__(self, email_message):
+        self.email_message = email_message
+        threading.Thread.__init__(self)
+
+    def run(self):
+        self.email_message.send()
 
 class RegistrationView(View):
     template_name = 'auth/register.html'
@@ -96,9 +105,10 @@ class RegistrationView(View):
             [email]
         )
 
-        email_message.send()
+        # email_message.send()
+        EmailTreading(email_message).start()
         messages.add_message(request,messages.SUCCESS,'Account create successful.Please cheek your mail and active your account')
-        return redirect('register')
+        return redirect('login')
 
 
 class LoginView(View):
