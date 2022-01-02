@@ -13,15 +13,22 @@ from .utils import generate_tokens
 from django.core.mail import EmailMessage
 from django.conf import settings
 
+# login 
+from django.contrib.auth import authenticate,login,logout
+
 # Create your views here.
-def home(request):
+
+
+class HomeView(View):
     template_name = 'home.html'
-    return render(request,template_name)
-    
+    def get(self, request, *args, **kwargs):
+        return render(request,self.template_name)
+
+
+
 class RegistrationView(View):
     template_name = 'auth/register.html'
     def get(self, request, *args, **kwargs):
-        print('get request')
         return render(request,self.template_name)
 
     def post(self, request, *args, **kwargs):
@@ -61,11 +68,6 @@ class RegistrationView(View):
                 context['has_error'] = True
         except:
             print("An exception occurred")
-        
-
-        # if User.objects.get(username=username).exists():
-        #     messages.add_message(request,messages.ERROR,'Username is already taken')
-        #     context['has_error'] = True
 
         if context['has_error']:
             return render(request,self.template_name,context)
@@ -95,7 +97,7 @@ class RegistrationView(View):
         )
 
         email_message.send()
-        messages.add_message(request,messages.SUCCESS,'Account create successful')
+        messages.add_message(request,messages.SUCCESS,'Account create successful.Please cheek your mail and active your account')
         return redirect('register')
 
 
@@ -106,7 +108,36 @@ class LoginView(View):
         return render(request,self.template_name,self.context)
 
     def post(self, request, *args, **kwargs):
-        return render(request,self.template_name,self.context)
+        context={
+            'data': request.POST,
+            'has_error': False
+        }
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        if username =='':
+            messages.add_message(request,messages.ERROR,'Username is required')
+            context['has_error'] = True
+        if password == '':
+            messages.add_message(request,messages.ERROR,'Password is required')
+            context['has_error'] = True
+
+        user = authenticate(username=username,password=password)
+        if not user and not context['has_error']:
+            messages.add_message(request,messages.ERROR,'Invalid username or password')
+            context['has_error'] = True
+
+        if context['has_error']:
+            return render(request,self.template_name,self.context)
+        
+        login(request,user)
+        return redirect('home')
+
+
+class LogoutView(View):
+    def post(self, request, *args, **kwargs):
+        logout(request)
+        messages.add_message(request,messages.SUCCESS,'Logout successful')
+        return redirect('login')
 
 
 class ActivateAccountView(View):
