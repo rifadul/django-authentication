@@ -4,15 +4,31 @@ from django.contrib import messages
 from validate_email import validate_email
 from django.contrib.auth.models import User
 
+# email validation
+from django.utils.http import urlsafe_base64_decode,urlsafe_base64_encode
+from django.utils.encoding import force_bytes,force_str,DjangoUnicodeDecodeError
+from django.contrib.sites.shortcuts import get_current_site
+from django.template.loader import render_to_string
+from .utils import generate_tokens
+from django.core.mail import EmailMessage
+from django.conf import settings
+
+# login 
+from django.contrib.auth import authenticate,login,logout
+
 # Create your views here.
-def home(request):
+
+
+class HomeView(View):
     template_name = 'home.html'
-    return render(request,template_name)
-    
+    def get(self, request, *args, **kwargs):
+        return render(request,self.template_name)
+
+
+
 class RegistrationView(View):
     template_name = 'auth/register.html'
     def get(self, request, *args, **kwargs):
-        print('get request')
         return render(request,self.template_name)
 
     def post(self, request, *args, **kwargs):
@@ -52,11 +68,6 @@ class RegistrationView(View):
                 context['has_error'] = True
         except:
             print("An exception occurred")
-        
-
-        # if User.objects.get(username=username).exists():
-        #     messages.add_message(request,messages.ERROR,'Username is already taken')
-        #     context['has_error'] = True
 
         if context['has_error']:
             return render(request,self.template_name,context)
@@ -68,7 +79,25 @@ class RegistrationView(View):
         user.is_active=False
         user.save()
 
-        messages.add_message(request,messages.SUCCESS,'Account create successful')
+# email validation
+        current_site = get_current_site(request)
+        email_subject = 'Active your Account'
+        message = render_to_string('auth/activate.html',{
+            'user':user,
+            'domain':current_site.domain,
+            'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+            'token': generate_tokens.make_token(user),
+        }
+        )
+        email_message = EmailMessage(
+            email_subject,
+            message,
+            settings.EMAIL_HOST_USER,
+            [email]
+        )
+
+        email_message.send()
+        messages.add_message(request,messages.SUCCESS,'Account create successful.Please cheek your mail and active your account')
         return redirect('register')
 
 
@@ -79,5 +108,54 @@ class LoginView(View):
         return render(request,self.template_name,self.context)
 
     def post(self, request, *args, **kwargs):
-        return render(request,self.template_name,self.context)
+        context={
+            'data': request.POST,
+            'has_error': False
+        }
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        if username =='':
+            messages.add_message(request,messages.ERROR,'Username is required')
+            context['has_error'] = True
+        if password == '':
+            messages.add_message(request,messages.ERROR,'Password is required')
+            context['has_error'] = True
+
+        user = authenticate(username=username,password=password)
+        if not user and not context['has_error']:
+            messages.add_message(request,messages.ERROR,'Invalid username or password')
+            context['has_error'] = True
+
+        if context['has_error']:
+            return render(request,self.template_name,self.context)
+        
+        login(request,user)
+        return redirect('home')
+
+
+class LogoutView(View):
+    def post(self, request, *args, **kwargs):
+        logout(request)
+        messages.add_message(request,messages.SUCCESS,'Logout successful')
+        return redirect('login')
+
+
+class ActivateAccountView(View):
+    template_name = 'auth/activate_failed'
+    def get(self, request, uidb64,token):
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except:
+            user = None
+
+        if user is not None and generate_tokens.check_token(user,token):
+            user.is_active = True
+            user.save()
+            messages.add_message(request,messages.INFO,'Account activated successful')
+            return redirect('login')
+        return render(request,self.template_name,status=401)
+
+    def post(self, request, *args, **kwargs):
+        pass
 

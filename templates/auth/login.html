@@ -23,12 +23,9 @@
                         {% include 'partials/_flash_messages.html'%}
                         <form action="{%url 'login'%}" method="POST">
                             {% csrf_token%}
-
-
                             <div class="form-group">
                                 <input class="form-control form-control-sm" type="text" name="username"
                                     value="{{data.username}}" placeholder="Username">
-
 
                             </div>
 
@@ -79,7 +76,7 @@
                 <div class="card mt-4">
                     <div class="card-body">
                         <p>
-                            Forgot Password? <a href="{% url 'request-reset-email' %}">Reset it here</a>
+                            Forgot Password? <a href="#">Reset it here</a>
                         </p>
                     </div>
                 </div>
