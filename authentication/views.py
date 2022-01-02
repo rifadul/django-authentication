@@ -4,6 +4,15 @@ from django.contrib import messages
 from validate_email import validate_email
 from django.contrib.auth.models import User
 
+# email validation
+from django.utils.http import urlsafe_base64_decode,urlsafe_base64_encode
+from django.utils.encoding import force_bytes,force_str,DjangoUnicodeDecodeError
+from django.contrib.sites.shortcuts import get_current_site
+from django.template.loader import render_to_string
+from .utils import generate_tokens
+from django.core.mail import EmailMessage
+from django.conf import settings
+
 # Create your views here.
 def home(request):
     template_name = 'home.html'
@@ -68,6 +77,24 @@ class RegistrationView(View):
         user.is_active=False
         user.save()
 
+# email validation
+        current_site = get_current_site(request)
+        email_subject = 'Active your Account'
+        message = render_to_string('auth/activate.html',{
+            'user':user,
+            'domain':current_site.domain,
+            'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+            'token': generate_tokens.make_token(user),
+        }
+        )
+        email_message = EmailMessage(
+            email_subject,
+            message,
+            settings.EMAIL_HOST_USER,
+            [email]
+        )
+
+        email_message.send()
         messages.add_message(request,messages.SUCCESS,'Account create successful')
         return redirect('register')
 
@@ -80,4 +107,24 @@ class LoginView(View):
 
     def post(self, request, *args, **kwargs):
         return render(request,self.template_name,self.context)
+
+
+class ActivateAccountView(View):
+    template_name = 'auth/activate_failed'
+    def get(self, request, uidb64,token):
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except:
+            user = None
+
+        if user is not None and generate_tokens.check_token(user,token):
+            user.is_active = True
+            user.save()
+            messages.add_message(request,messages.INFO,'Account activated successful')
+            return redirect('login')
+        return render(request,self.template_name,status=401)
+
+    def post(self, request, *args, **kwargs):
+        pass
 
